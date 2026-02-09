@@ -1,19 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Avoid Netflix Pause",
+  "name": "Netflix Auto-Resume",
   "version": "1.0",
-  "description": "Simulate mouse event in Chrome to avoid Netflix pause",
-  "permissions": [
-    "storage"
-  ],
+  "description": "Automatically clicks 'Continue Watching' on Netflix to prevent auto-pausing.",
+  "permissions": ["storage"],
   "content_scripts": [
     {
-      "matches": [
-        "*://*.netflix.com/*"
-      ],
-      "js": [
-        "content.js"
-      ]
+      "matches": ["*://*.netflix.com/*"],
+      "js": ["content.js"]
     }
   ]
 }

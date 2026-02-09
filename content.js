@@ -1,71 +1,65 @@
 /**
  * Netflix Auto-Resume Content Script (Manifest V3)
- * 1. 定期模拟鼠标活动以防止闲置对话框弹出
- * 2. 如果对话框已弹出，则模拟真实的鼠标点击事件关闭它
+ * 策略：精确点击 + 重复触发保护
  */
 
 (function() {
   'use strict';
 
-  const SELECTORS = [
+  const BUTTON_SELECTORS = [
+    '[data-uia="interrupt-autoplay-continue"]',
     'button[aria-label="Continue Watching"]',
     'button[aria-label="Keep Watching"]',
-    '.postplay-still-watching-button',
-    '[data-uia="interrupt-autocomplete-continue"]'
+    '.postplay-still-watching-button'
   ];
 
-  /**
-   * 模拟鼠标点击事件
-   * 比直接调用 .click() 更接近真实用户操作
-   */
-  function simulateMouseClick(element) {
-    const mouseEvents = ['mousedown', 'mouseup', 'click'];
-    mouseEvents.forEach(mouseEventType => {
-      element.dispatchEvent(new MouseEvent(mouseEventType, {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        buttons: 1
-      }));
-    });
-  }
+  let lastClickTime = 0;
+  const CLICK_COOLDOWN = 5000; // 5秒冷却时间，防止重复触发
 
   /**
-   * 检查并处理暂停对话框
+   * 查找并点击按钮
    */
-  function checkAndClick() {
-    for (const selector of SELECTORS) {
+  function findAndClickButton() {
+    const now = Date.now();
+    
+    // 如果距离上次点击不足 5 秒，则跳过
+    if (now - lastClickTime < CLICK_COOLDOWN) return;
+
+    for (const selector of BUTTON_SELECTORS) {
       const button = document.querySelector(selector);
-      if (button && (button.offsetWidth > 0 || button.offsetHeight > 0)) {
-        console.log('Netflix Auto-Resume: 发现暂停按钮，模拟点击中...');
-        simulateMouseClick(button);
-        return true;
+      
+      // 检查按钮是否存在、可见，且没有被标记为已点击
+      if (button && isVisible(button) && !button.hasAttribute('data-extension-clicked')) {
+        
+        console.log(`Netflix Auto-Resume: 发现按钮 ${selector}，正在执行点击...`);
+        
+        // 1. 更新状态防止重复
+        lastClickTime = now;
+        button.setAttribute('data-extension-clicked', 'true');
+
+        // 2. 模拟点击
+        const opts = { bubbles: true, cancelable: true, view: window };
+        button.dispatchEvent(new MouseEvent('mousedown', opts));
+        button.dispatchEvent(new MouseEvent('mouseup', opts));
+        button.click();
+        
+        // 3. 点击后尝试让按钮失焦，更像真实行为
+        button.blur();
+
+        return true; 
       }
     }
-    return false;
   }
 
-  /**
-   * 模拟微小的鼠标移动以保持活跃状态
-   */
-  function simulateActivity() {
-    const event = new MouseEvent('mousemove', {
-      view: window,
-      bubbles: true,
-      cancelable: true,
-      clientX: Math.floor(Math.random() * window.innerWidth),
-      clientY: Math.floor(Math.random() * window.innerHeight)
-    });
-    document.dispatchEvent(event);
-    // console.log('Netflix Auto-Resume: 已发送模拟鼠标移动以保持活跃');
+  function isVisible(el) {
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
   }
 
-  // 1. 每隔 60 秒模拟一次鼠标活动，防止触发闲置逻辑
-  setInterval(simulateActivity, 60000);
+  // --- 自动化触发 ---
 
-  // 2. 使用 MutationObserver 监听 DOM 变化（实时捕获按钮）
+  // 使用 MutationObserver 监听
   const observer = new MutationObserver(() => {
-    checkAndClick();
+    findAndClickButton();
   });
 
   observer.observe(document.body, {
@@ -73,5 +67,8 @@
     subtree: true
   });
 
-  console.log('Netflix Auto-Resume: 增强型（模拟鼠标事件）扩展已启动');
+  // 每秒保底检查
+  setInterval(findAndClickButton, 1000);
+
+  console.log('Netflix Auto-Resume: 保护模式已启动（已添加重复点击拦截）。');
 })();
